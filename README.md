@@ -70,7 +70,7 @@ docker run -p 8501:8501 aitravelplanner
 
 ## 🌐 Live Demo
 The backend is deployed on Render:
-- **Render API Link:** [https://aitravel-planner-gy4l.onrender.com/](https://aitravel-planner-gy4l.onrender.com/)
+- **Render API Link:** ([https://aitravel-planner-gy4l.onrender.com/](https://aitravel-planner-frontend.onrender.com/))
 
 To deploy your own version, connect your repository to [Render](https://render.com/) and follow their Python/Streamlit deployment guides.
 
