@@ -16,7 +16,7 @@ Welcome to the **AI Travel Planner Agentic Application**! This project leverages
 ## 🛠️ Tech Stack
 - **Frontend:** Streamlit
 - **Backend:** FastAPI
-- **AI/LLM:** LangChain, OpenAI, Groq, Google Places, Tavily
+- **AI/LLM:** LangChain,Langgraph OpenAI, Groq, Google Places, Tavily
 - **Other:** Pydantic, Uvicorn, Requests, Python-dotenv
 
 ---
@@ -70,7 +70,7 @@ docker run -p 8501:8501 aitravelplanner
 
 ## 🌐 Live Demo
 The backend is deployed on Render:
-- **Render API Link:** [https://aitravel-planner-gy4l.onrender.com/](https://aitravel-planner-gy4l.onrender.com/)
+- **Render API Link:** ([https://aitravel-planner-gy4l.onrender.com/](https://aitravel-planner-frontend.onrender.com/))
 
 To deploy your own version, connect your repository to [Render](https://render.com/) and follow their Python/Streamlit deployment guides.
 
@@ -106,6 +106,3 @@ To deploy your own version, connect your repository to [Render](https://render.c
 
 ## 📄 License
 This project is for educational and demonstration purposes. Please verify all travel information before making plans.
-
-
-
