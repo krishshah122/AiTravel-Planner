@@ -7,7 +7,6 @@ from tools.weather import WeatherInfoTool
 from tools.placesearch import PlaceSearchTool
 from tools.expense import CalculatorTool
 from tools.convtcurr import CurrencyConverterTool
-
 class GraphBuilder():
     def __init__(self,model_provider: str = "groq"):
         self.model_loader = ModelLoader(model_provider=model_provider)

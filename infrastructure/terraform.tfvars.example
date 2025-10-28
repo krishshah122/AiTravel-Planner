@@ -1,0 +1,17 @@
+# AWS Configuration
+aws_region = "us-east-1"
+
+# Project Configuration
+project_name = "langgraph-travel-planner"
+
+# Availability Zones
+availability_zones = ["us-east-1a", "us-east-1b"]
+
+# ECR Repository
+ecr_repository_name = "langgraph-travel-planner"
+
+# ECS Cluster
+ecs_cluster_name = "langgraph-cluster"
+
+# S3 Bucket
+s3_bucket_name = "langgraph-travel-planner-frontend" 

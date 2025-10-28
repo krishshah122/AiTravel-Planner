@@ -1,0 +1,57 @@
+{
+  "family": "langgraph-task-definition",
+  "networkMode": "awsvpc",
+  "requiresCompatibilities": ["FARGATE"],
+  "cpu": "512",
+  "memory": "1024",
+  "executionRoleArn": "arn:aws:iam::ACCOUNT_ID:role/ecsTaskExecutionRole",
+  "taskRoleArn": "arn:aws:iam::ACCOUNT_ID:role/ecsTaskRole",
+  "containerDefinitions": [
+    {
+      "name": "langgraph-app",
+      "image": "ACCOUNT_ID.dkr.ecr.us-east-1.amazonaws.com/langgraph-travel-planner:latest",
+      "portMappings": [
+        {
+          "containerPort": 8000,
+          "protocol": "tcp"
+        }
+      ],
+      "essential": true,
+      "logConfiguration": {
+        "logDriver": "awslogs",
+        "options": {
+          "awslogs-group": "/ecs/langgraph-travel-planner",
+          "awslogs-region": "us-east-1",
+          "awslogs-stream-prefix": "ecs"
+        }
+      },
+      "environment": [
+        {
+          "name": "ENVIRONMENT",
+          "value": "production"
+        }
+      ],
+      "secrets": [
+        {
+          "name": "GROQ_API_KEY",
+          "valueFrom": "arn:aws:secretsmanager:us-east-1:ACCOUNT_ID:secret:langgraph/groq-api-key"
+        },
+        {
+          "name": "TAVILY_API_KEY",
+          "valueFrom": "arn:aws:secretsmanager:us-east-1:ACCOUNT_ID:secret:langgraph/tavily-api-key"
+        },
+        {
+          "name": "OPENAI_API_KEY",
+          "valueFrom": "arn:aws:secretsmanager:us-east-1:ACCOUNT_ID:secret:langgraph/openai-api-key"
+        }
+      ],
+      "healthCheck": {
+        "command": ["CMD-SHELL", "curl -f http://localhost:8000/health || exit 1"],
+        "interval": 30,
+        "timeout": 5,
+        "retries": 3,
+        "startPeriod": 60
+      }
+    }
+  ]
+} 
