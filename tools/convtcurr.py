@@ -12,7 +12,6 @@ class CurrencyConverterTool:
         self.currency_converter_tool_list = self._setup_tools()
 
     def _setup_tools(self) -> List:
-        """Setup all tools for the currency converter tool"""
         @tool
         def convert_currency(amount:float, from_currency:str, to_currency:str):
             """Convert amount from one currency to another"""

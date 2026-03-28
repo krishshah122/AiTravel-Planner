@@ -1,10 +1,9 @@
-from fastapi import FastAPI, HTTPException, Request, Depends, Security
+from fastapi import FastAPI, HTTPException, Request, Depends
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.trustedhost import TrustedHostMiddleware
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from supabase import create_client, Client
 from agent.agent import GraphBuilder
-from utils.doc import save_document
 from starlette.responses import JSONResponse
 import os
 import datetime
@@ -140,7 +139,7 @@ async def query_travel_agent(query: QueryRequest, current_user = Depends(get_cur
 
         # Process the query
         messages = {"messages": query.messages}
-        output = react_app.invoke(messages)
+        output = await react_app.invoke(messages)
 
         # Handle different output formats
         if isinstance(output, dict) and "messages" in output:

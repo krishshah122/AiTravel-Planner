@@ -7,34 +7,43 @@ from dotenv import load_dotenv
 class WeatherInfoTool:
     def __init__(self):
         load_dotenv()
-        self.api_key = os.environ.get("OPENWEATHERMAP_API_KEY")
-        self.weather_service = WeatherForecastTool(self.api_key)
+        self.weather_service = WeatherForecastTool()
         self.weather_tool_list = self._setup_tools()
     
     def _setup_tools(self) -> List:
         """Setup all tools for the weather forecast tool"""
         @tool
         def get_current_weather(city: str) -> str:
-            """Fetch live weather for one city. Pass only the city name (e.g. Mumbai), not JSON in the tool name."""
+            """Fetch live weather for one city using Open-Meteo."""
             weather_data = self.weather_service.get_current_weather(city)
-            if weather_data:
-                temp = weather_data.get('main', {}).get('temp', 'N/A')
-                desc = weather_data.get('weather', [{}])[0].get('description', 'N/A')
-                return f"Current weather in {city}: {temp}°C, {desc}"
+            current = weather_data.get('current_weather', {}) if weather_data else {}
+            if current:
+                temp = current.get('temperature', 'N/A')
+                wind = current.get('windspeed', 'N/A')
+                code = current.get('weathercode', 'N/A')
+                return f"Current weather in {city}: {temp}°C, wind {wind} km/h, weather code {code}"
             return f"Could not fetch weather for {city}"
         
         @tool
         def get_weather_forecast(city: str) -> str:
-            """Get weather forecast for a city"""
+            """Get weather forecast for a city using Open-Meteo."""
             forecast_data = self.weather_service.get_forecast_weather(city)
-            if forecast_data and 'list' in forecast_data:
+            daily = forecast_data.get('daily', {}) if forecast_data else {}
+            if daily and daily.get('time'):
                 forecast_summary = []
-                for i in range(len(forecast_data['list'])):
-                    item = forecast_data['list'][i]
-                    date = item['dt_txt'].split(' ')[0]
-                    temp = item['main']['temp']
-                    desc = item['weather'][0]['description']
-                    forecast_summary.append(f"{date}: {temp} degree celcius , {desc}")
+                dates = daily.get('time', [])
+                temps_max = daily.get('temperature_2m_max', [])
+                temps_min = daily.get('temperature_2m_min', [])
+                precip = daily.get('precipitation_sum', [])
+                days = min(len(dates), len(temps_max), len(temps_min))
+                for i in range(days):
+                    date = dates[i]
+                    tmax = temps_max[i]
+                    tmin = temps_min[i]
+                    rain = precip[i] if i < len(precip) else 'N/A'
+                    forecast_summary.append(
+                        f"{date}: high {tmax}°C, low {tmin}°C, precipitation {rain} mm"
+                    )
                 return f"Weather forecast for {city}:\n" + "\n".join(forecast_summary)
             return f"Could not fetch forecast for {city}"
     

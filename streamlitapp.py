@@ -1,19 +1,10 @@
 import streamlit as st
 import requests
-import datetime
 import os
-import sys
-from types import SimpleNamespace
 from supabase import create_client, Client
-import folium
 import uuid
-from streamlit_folium import st_folium
 import extra_streamlit_components as stx
-from geopy.geocoders import Nominatim
-from geopy.exc import GeocoderServiceError, GeocoderTimedOut, GeocoderUnavailable
 from dotenv import load_dotenv
-from langchain_groq import ChatGroq
-from langchain_core.messages import HumanMessage
 
 load_dotenv(override=True)
 
@@ -236,8 +227,6 @@ with st.sidebar:
             pass
         st.session_state.current_chat_id = str(uuid.uuid4())
         st.session_state.messages = []
-        if "last_query" in st.session_state:
-            del st.session_state.last_query
         cookie_manager.set("current_chat_id", st.session_state.current_chat_id)
         st.rerun()
         
@@ -267,8 +256,6 @@ with st.sidebar:
                         pass
                     
                     st.session_state.current_chat_id = t["id"]
-                    if "last_query" in st.session_state:
-                        del st.session_state.last_query
                     cookie_manager.set("current_chat_id", t["id"])
                     
                     chat_data = supabase.table("chat_history").select("messages").eq("id", t["id"]).execute()
@@ -276,7 +263,10 @@ with st.sidebar:
                         st.session_state.messages = chat_data.data[0].get("messages", [])
                     st.rerun()
     except Exception as e:
-        st.caption("Unable to fetch threads.")
+        st.caption(
+            "Unable to fetch trips. This is often caused by Supabase row-level security or incorrect auth permissions. "
+            f"Error: {e}"
+        )
         
     st.markdown("---")
     
@@ -298,8 +288,8 @@ st.title("🌍 Plan Your Next Adventure")
 if "messages" not in st.session_state:
     st.session_state.messages = []
 
-# View Strategy: Chat on the Left, Map on the Right
-main_col, map_col = st.columns([1.5, 1])
+# View Strategy: Chat in Full Width
+main_col = st.container()
 
 with main_col:
     # 1. Render Chat History safely without destroying formatting
@@ -324,9 +314,6 @@ with main_col:
 
     # 3. Handle Submit
     if submit_button and user_input.strip():
-        # Save query to session state so the map component can try to geolocate it
-        st.session_state.last_query = user_input
-        
         try:
             st.session_state.messages.append(f"User: {user_input}")
             with st.spinner("🤖 AI is orchestrating your trip..."):
@@ -361,70 +348,10 @@ with main_col:
 # DYNAMIC MAP (Right Column)
 # -----------------
 
-@st.cache_data(ttl=3600, show_spinner=False)
-def get_cached_location(query):
-    if not query or not query.strip():
-        return None
-
-    map_city = query.strip()
-    groq_api_key = os.getenv("GROQ_API_KEY")
-    if groq_api_key:
-        try:
-            llm = ChatGroq(model="llama3-8b-8192", api_key=groq_api_key)
-            sys_prompt = (
-                f"Extract only the destination city from this trip query. "
-                f"Do not say anything else. Return ONLY the city name string. Query: '{query}'"
-            )
-            extracted = llm.invoke([HumanMessage(content=sys_prompt)]).content.strip(" '\"\n.,")
-            if extracted:
-                map_city = extracted
-        except Exception:
-            # Fall back to the raw query if the LLM extraction fails.
-            map_city = query.strip()
-
-    geolocator = Nominatim(user_agent="ai_travel_planner_map")
-    try:
-        return geolocator.geocode(map_city, timeout=10)
-    except (GeocoderTimedOut, GeocoderServiceError, GeocoderUnavailable, Exception):
-        fallback_url = "https://nominatim.openstreetmap.org/search"
-        params = {"q": map_city, "format": "json", "limit": 1}
-        headers = {"User-Agent": "TripAgentBot/1.0 (your_email@example.com)"}
-        response = requests.get(fallback_url, params=params, headers=headers, timeout=10)
-        if response.status_code == 200:
-            data = response.json()
-            if data:
-                return SimpleNamespace(
-                    latitude=float(data[0]["lat"]),
-                    longitude=float(data[0]["lon"]),
-                    address=data[0].get("display_name", map_city),
-                )
-        return None
 
 
-with map_col:
-    st.subheader("🗺️ Destination Map")
-    if "last_query" in st.session_state:
-        with st.spinner("Locating..."):
-            try:
-                location = get_cached_location(st.session_state.last_query)
-                if location:
-                    m = folium.Map(location=[location.latitude, location.longitude], zoom_start=11)
-                    folium.Marker(
-                        [location.latitude, location.longitude], 
-                        popup=location.address, 
-                        icon=folium.Icon(color='blue', icon='info-sign')
-                    ).add_to(m)
-                    st_folium(m, width=400, height=500)
-                else:
-                    st.info("I couldn't pinpoint the exact city from your message. Try mentioning a specific city name!")
-            except Exception as e:
-                st.warning(
-                    "Map failed to load. This may be caused by Nominatim rate limits, an invalid destination, "
-                    "or a failed city extraction step."
-                )
-                st.caption(f"Geocoding error: {e}")
-    else:
-        st.info("Send a destination query to see the map!")
+
+
 
 # -----------------
 # CALENDAR UTILITY (Rendered at end, displayed inside main_col)
