@@ -3,12 +3,14 @@ import requests
 import datetime
 import os
 import sys
+from types import SimpleNamespace
 from supabase import create_client, Client
 import folium
 import uuid
 from streamlit_folium import st_folium
 import extra_streamlit_components as stx
 from geopy.geocoders import Nominatim
+from geopy.exc import GeocoderServiceError, GeocoderTimedOut, GeocoderUnavailable
 from dotenv import load_dotenv
 from langchain_groq import ChatGroq
 from langchain_core.messages import HumanMessage
@@ -342,8 +344,11 @@ with main_col:
                         st.session_state.current_chat_id,
                         st.session_state.messages,
                     )
-                except Exception as db_e:
-                    st.toast(f"Silent DB Backup Failed: {db_e}")
+                except Exception:
+                    st.toast(
+                        "Could not save chat history. This is often caused by Supabase row-level security or permission settings. "
+                        "The assistant response still completed successfully."
+                    )
                 
                 # Re-run immediately to render the Assistant's message AND trigger the map draw
                 st.rerun() 
@@ -358,13 +363,42 @@ with main_col:
 
 @st.cache_data(ttl=3600, show_spinner=False)
 def get_cached_location(query):
-    # Use blazing-fast Groq to dynamically trim the sentence into an exact city name
-    llm = ChatGroq(model="llama3-8b-8192", api_key=os.getenv("GROQ_API_KEY"))
-    sys_prompt = f"Extract only the destination city from this trip query. Do not say anything else. Return ONLY the city name string. Query: '{query}'"
-    map_city = llm.invoke([HumanMessage(content=sys_prompt)]).content.strip(" '\"\n.,")
-    
+    if not query or not query.strip():
+        return None
+
+    map_city = query.strip()
+    groq_api_key = os.getenv("GROQ_API_KEY")
+    if groq_api_key:
+        try:
+            llm = ChatGroq(model="llama3-8b-8192", api_key=groq_api_key)
+            sys_prompt = (
+                f"Extract only the destination city from this trip query. "
+                f"Do not say anything else. Return ONLY the city name string. Query: '{query}'"
+            )
+            extracted = llm.invoke([HumanMessage(content=sys_prompt)]).content.strip(" '\"\n.,")
+            if extracted:
+                map_city = extracted
+        except Exception:
+            # Fall back to the raw query if the LLM extraction fails.
+            map_city = query.strip()
+
     geolocator = Nominatim(user_agent="ai_travel_planner_map")
-    return geolocator.geocode(map_city, timeout=4)
+    try:
+        return geolocator.geocode(map_city, timeout=10)
+    except (GeocoderTimedOut, GeocoderServiceError, GeocoderUnavailable, Exception):
+        fallback_url = "https://nominatim.openstreetmap.org/search"
+        params = {"q": map_city, "format": "json", "limit": 1}
+        headers = {"User-Agent": "TripAgentBot/1.0 (your_email@example.com)"}
+        response = requests.get(fallback_url, params=params, headers=headers, timeout=10)
+        if response.status_code == 200:
+            data = response.json()
+            if data:
+                return SimpleNamespace(
+                    latitude=float(data[0]["lat"]),
+                    longitude=float(data[0]["lon"]),
+                    address=data[0].get("display_name", map_city),
+                )
+        return None
 
 
 with map_col:
@@ -384,7 +418,11 @@ with map_col:
                 else:
                     st.info("I couldn't pinpoint the exact city from your message. Try mentioning a specific city name!")
             except Exception as e:
-                st.warning("Map failed to load. (Geocoding API limits reached).")
+                st.warning(
+                    "Map failed to load. This may be caused by Nominatim rate limits, an invalid destination, "
+                    "or a failed city extraction step."
+                )
+                st.caption(f"Geocoding error: {e}")
     else:
         st.info("Send a destination query to see the map!")
 
