@@ -23,9 +23,11 @@ MANIFEST
 
 # Virtual environments
 venv/
+venv_app/
 env/
 ENV/
 .venv/
+*.exe
 .env
 
 # Environment variables

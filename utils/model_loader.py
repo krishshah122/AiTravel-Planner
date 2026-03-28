@@ -1,5 +1,6 @@
 import os
 from dotenv import load_dotenv
+load_dotenv(override=True)
 from typing import Literal, Optional, Any
 from pydantic import BaseModel, Field
 from utils.config_loader import load_config

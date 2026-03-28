@@ -16,4 +16,11 @@ langgraph
 langchain-google-community[places]
 curl_cffi
 
+# Frontend UI Enhancements
+supabase
+streamlit-folium
+folium
+geopy
+extra-streamlit-components
+
 -e .

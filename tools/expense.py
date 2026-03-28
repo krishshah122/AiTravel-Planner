@@ -11,21 +11,13 @@ class CalculatorTool:
         """Setup all tools for the calculator tool"""
 
         @tool
-        def estimate_total_hotel_cost(price_per_night: float, total_days: float) -> float:
-            """
-            Calculate total hotel cost.
-            Requires price_per_night and total_days as floats.
-            """
+        def estimate_total_hotel_cost(price_per_night:str, total_days:float) -> float:
+            """Calculate total hotel cost"""
             return self.calculator.multiply(price_per_night, total_days)
 
         @tool
-        def calculate_total_expense(costs: List[float]) -> float:
-            """
-            Calculate total expense of the trip. 
-            Provide a list of all individual costs as the 'costs' parameter.
-            """
-            # We unpack the list using *costs because your Calculator class 
-            # likely uses *args in its calculate_total method.
+        def calculate_total_expense(*costs: float) -> float:
+            """Calculate total expense of the trip"""
             return self.calculator.calculate_total(*costs)
 
         @tool
