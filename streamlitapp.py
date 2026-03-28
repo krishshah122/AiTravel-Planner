@@ -15,7 +15,7 @@ from langchain_core.messages import HumanMessage
 
 load_dotenv(override=True)
 
-BASE_URL = "https://aitravel-planner-gy4l.onrender.com"  
+BASE_URL = os.getenv("Backend_url")
 # BASE_URL = "http://localhost:8000"  
 
 # -----------------
