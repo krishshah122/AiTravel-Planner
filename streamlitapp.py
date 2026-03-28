@@ -35,6 +35,26 @@ def persist_chat_thread(supabase_client: Client, user_id: str, chat_id: str, mes
         },
         on_conflict="id",
     ).execute()
+
+
+def fetch_user_threads(supabase_client: Client, user_id: str) -> list:
+    try:
+        response = supabase_client.table("chat_history").select("id, title, messages").eq("user_id", user_id).order("updated_at", desc=True).execute()
+        return response.data or []
+    except Exception:
+        return []
+
+
+def choose_initial_chat_thread(threads: list, preferred_chat_id: str | None = None):
+    if preferred_chat_id:
+        selected = next((t for t in threads if t["id"] == preferred_chat_id), None)
+        if selected:
+            return selected
+    selected = next((t for t in threads if t.get("messages")), None)
+    if selected:
+        return selected
+    return threads[0] if threads else None
+
 # BASE_URL = "http://localhost:8000"  
 
 # -----------------
@@ -125,15 +145,17 @@ if st.session_state.user is None:
             if res and res.user:
                 st.session_state.user = res.user
                 st.session_state.access_token = saved_jwt
-                
-                # Pull all chat threads for the user, ordered chronologically
-                db_response = supabase.table("chat_history").select("id, messages").eq("user_id", res.user.id).order("updated_at", desc=True).limit(1).execute()
-                if len(db_response.data) > 0:
-                    st.session_state.current_chat_id = db_response.data[0].get("id")
-                    st.session_state.messages = db_response.data[0].get("messages", [])
+
+                saved_chat_id = cookie_manager.get("current_chat_id")
+                all_threads = fetch_user_threads(supabase, res.user.id)
+                selected_thread = choose_initial_chat_thread(all_threads, saved_chat_id)
+                if selected_thread:
+                    st.session_state.current_chat_id = selected_thread["id"]
+                    st.session_state.messages = selected_thread.get("messages", [])
                 else:
                     st.session_state.current_chat_id = str(uuid.uuid4())
                     st.session_state.messages = []
+                cookie_manager.set("current_chat_id", st.session_state.current_chat_id)
                 st.rerun() # Magic Bypass!
         except Exception:
             pass # Invalid/Expired Cookie: Fallthrough to Login rendering
@@ -162,13 +184,14 @@ if st.session_state.user is None:
                         # Write the permanent Cookie into the browser to survive F5
                         cookie_manager.set("supabase_jwt", res.session.access_token)
                         
-                        # Enterprise Chat Backup Fetch
+                        # Restore the last selected thread if possible
                         try:
-                            # Pull chat history from the DB if it exists
-                            db_response = supabase.table("chat_history").select("id, messages").eq("user_id", res.user.id).order("updated_at", desc=True).limit(1).execute()
-                            if len(db_response.data) > 0:
-                                st.session_state.current_chat_id = db_response.data[0].get("id")
-                                st.session_state.messages = db_response.data[0].get("messages", [])
+                            saved_chat_id = cookie_manager.get("current_chat_id")
+                            all_threads = fetch_user_threads(supabase, res.user.id)
+                            selected_thread = choose_initial_chat_thread(all_threads, saved_chat_id)
+                            if selected_thread:
+                                st.session_state.current_chat_id = selected_thread["id"]
+                                st.session_state.messages = selected_thread.get("messages", [])
                             else:
                                 st.session_state.current_chat_id = str(uuid.uuid4())
                                 st.session_state.messages = []
@@ -176,7 +199,8 @@ if st.session_state.user is None:
                             st.session_state.current_chat_id = str(uuid.uuid4())
                             st.session_state.messages = []
                             st.warning(f"Could not load previous chats: {fetch_e}")
-                            
+                        cookie_manager.set("current_chat_id", st.session_state.current_chat_id)
+                        
                         st.rerun()
                     else:
                         res = supabase.auth.sign_up({"email": email, "password": password})
@@ -212,11 +236,7 @@ with st.sidebar:
         st.session_state.messages = []
         if "last_query" in st.session_state:
             del st.session_state.last_query
-        try:
-            # Reserve physical blank Row
-            supabase.table("chat_history").insert({"id": st.session_state.current_chat_id, "user_id": st.session_state.user.id, "title": "New Trip", "messages": []}).execute()
-        except Exception:
-            pass
+        cookie_manager.set("current_chat_id", st.session_state.current_chat_id)
         st.rerun()
         
     st.markdown("---")
@@ -233,10 +253,21 @@ with st.sidebar:
                 is_active = (st.session_state.get("current_chat_id") == t["id"])
                 prefix = "🟢 " if is_active else "🗺️ "
                 if st.button(f"{prefix} {t['title']}", key=t['id'], use_container_width=True):
-                    # Multi-Thread Switcher
+                    # Persist the current thread before switching
+                    try:
+                        persist_chat_thread(
+                            supabase,
+                            st.session_state.user.id,
+                            st.session_state.current_chat_id,
+                            st.session_state.get("messages") or [],
+                        )
+                    except Exception:
+                        pass
+                    
                     st.session_state.current_chat_id = t["id"]
                     if "last_query" in st.session_state:
                         del st.session_state.last_query
+                    cookie_manager.set("current_chat_id", t["id"])
                     
                     chat_data = supabase.table("chat_history").select("messages").eq("id", t["id"]).execute()
                     if len(chat_data.data) > 0:
