@@ -16,6 +16,25 @@ from langchain_core.messages import HumanMessage
 load_dotenv(override=True)
 
 BASE_URL = os.getenv("Backend_url")
+
+
+def persist_chat_thread(supabase_client: Client, user_id: str, chat_id: str, messages: list) -> None:
+    """Upsert the current thread so it appears under Your Trips and survives switching trips."""
+    if not messages:
+        return
+    current_title = "New Trip"
+    first_user_msg = [m for m in messages if m.startswith("User:")]
+    if first_user_msg:
+        current_title = first_user_msg[0].replace("User: ", "")[:25] + "..."
+    supabase_client.table("chat_history").upsert(
+        {
+            "id": chat_id,
+            "user_id": user_id,
+            "title": current_title,
+            "messages": messages,
+        },
+        on_conflict="id",
+    ).execute()
 # BASE_URL = "http://localhost:8000"  
 
 # -----------------
@@ -178,6 +197,17 @@ with st.sidebar:
     
     st.markdown("<br>", unsafe_allow_html=True)
     if st.button("➕ Start New Trip", use_container_width=True):
+        # Save the trip you are leaving first; otherwise only successful /query runs
+        # persisted to DB and failed replies never show up under Your Trips.
+        try:
+            persist_chat_thread(
+                supabase,
+                st.session_state.user.id,
+                st.session_state.current_chat_id,
+                st.session_state.get("messages") or [],
+            )
+        except Exception:
+            pass
         st.session_state.current_chat_id = str(uuid.uuid4())
         st.session_state.messages = []
         if "last_query" in st.session_state:
@@ -185,7 +215,8 @@ with st.sidebar:
         try:
             # Reserve physical blank Row
             supabase.table("chat_history").insert({"id": st.session_state.current_chat_id, "user_id": st.session_state.user.id, "title": "New Trip", "messages": []}).execute()
-        except: pass
+        except Exception:
+            pass
         st.rerun()
         
     st.markdown("---")
@@ -273,24 +304,15 @@ with main_col:
                 answer = response.json().get("answer", "No answer returned.")
                 st.session_state.messages.append(f"Assistant: {answer}")
                 
-                # ------ NEW: ENTERPRISE DB BACKUP UPSERT -------
                 try:
-                    # Snag dynamic title from first message robustly
-                    current_title = "New Trip"
-                    if len(st.session_state.messages) > 0:
-                        first_user_msg = [m for m in st.session_state.messages if m.startswith("User:")]
-                        if first_user_msg:
-                            current_title = first_user_msg[0].replace("User: ", "")[:25] + "..."
-                            
-                    supabase.table("chat_history").upsert({
-                        "id": st.session_state.current_chat_id,
-                        "user_id": st.session_state.user.id,
-                        "title": current_title,
-                        "messages": st.session_state.messages
-                    }, on_conflict="id").execute()
+                    persist_chat_thread(
+                        supabase,
+                        st.session_state.user.id,
+                        st.session_state.current_chat_id,
+                        st.session_state.messages,
+                    )
                 except Exception as db_e:
                     st.toast(f"Silent DB Backup Failed: {db_e}")
-                # -----------------------------------------------
                 
                 # Re-run immediately to render the Assistant's message AND trigger the map draw
                 st.rerun() 
